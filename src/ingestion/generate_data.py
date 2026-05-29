@@ -684,6 +684,11 @@ def generate_loans(n=500):
     }
 
     used_disbursement_ids = set()
+    days_past_due = 0
+    missed_payments_count = 0
+    penalty_amount = 0.00
+    amount_repaid = 0.00
+    outstanding_balance = 0.00
 
     for i in range(1, n + 1):
         linked_disbursement = None
@@ -764,6 +769,7 @@ def generate_loans(n=500):
                 "existing_unpaid_loan"
             ])
 
+          
             amount_disbursed = 0.00
             penalty_amount = 0.00
             total_repayable_amount = 0.00
@@ -828,13 +834,13 @@ def generate_loans(n=500):
             due_date = (created_at + timedelta(days=tenure_days)).date()
 
         if repayment_status == "late":
-            days_past_due = random.randint(1, 60)
+            days_past_due_value = random.randint(1, 60)
             missed_payments_count = random.randint(1, 3)
         elif repayment_status == "defaulted":
-            days_past_due = random.randint(61, 180)
+            days_past_due_value = random.randint(61, 180)
             missed_payments_count = random.randint(2, 6)
         else:
-            days_past_due = 0
+            days_past_due_value = 0
             missed_payments_count = 0
 
         if amount_repaid > 0:
@@ -910,7 +916,7 @@ def generate_loans(n=500):
             "next_repayment_amount": next_repayment_amount,
             "last_repayment_date": last_repayment_date,
             "last_repayment_amount": last_repayment_amount,
-            "days_past_due": days_past_due,
+            "days_past_due": days_past_due_value,
             "missed_payments_count": missed_payments_count,
 
             "auto_debit_enabled": weighted_choice({
@@ -948,14 +954,488 @@ def generate_loans(n=500):
         loans.append(loan)
 
     return loans
-   
+
+def random_ghana_coordinates():
+    """
+    Ghana rough bounding box:
+    latitude: 4.5 to 11.5
+    longitude: -3.5 to 1.2
+    """
+    latitude = round(random.uniform(4.5, 11.5), 7)
+    longitude = round(random.uniform(-3.5, 1.2), 7)
+    return latitude, longitude
+
+
+def get_event_category(event_name):
+    if event_name == "login":
+        return "AUTHENTICATION"
+
+    if event_name in [
+        "transfer_initiated",
+        "transfer_completed",
+        "transfer_failed"
+    ]:
+        return "TRANSFER"
+
+    if event_name in [
+        "bill_payment_initiated",
+        "bill_payment_completed"
+    ]:
+        return "BILL_PAYMENT"
+
+    if event_name in [
+        "loan_application_started",
+        "loan_application_submitted"
+    ]:
+        return "LOAN"
+
+    if event_name == "balance_check":
+        return "ACCOUNT"
+
+    if event_name == "profile_updated":
+        return "PROFILE"
+
+    return "GENERAL"
+
+
+def get_screen_name(event_name):
+    screen_map = {
+        "login": "Login",
+        "transfer_initiated": "Send Money",
+        "transfer_completed": "Transfer Confirmation",
+        "transfer_failed": "Transfer Failed",
+        "bill_payment_initiated": "Bill Payment",
+        "bill_payment_completed": "Bill Payment Confirmation",
+        "loan_application_started": "Loan Application",
+        "loan_application_submitted": "Loan Review",
+        "balance_check": "Wallet Balance",
+        "profile_updated": "Profile Settings"
+    }
+
+    return screen_map.get(event_name, "Home")
+
+
+def get_flow_name(event_name):
+    if event_name.startswith("transfer"):
+        return "MoMo Transfer"
+
+    if event_name.startswith("bill_payment"):
+        return "Bill Payment"
+
+    if event_name.startswith("loan_application"):
+        return "Micro Loan Application"
+
+    if event_name == "login":
+        return "Authentication"
+
+    if event_name == "balance_check":
+        return "Account Balance"
+
+    if event_name == "profile_updated":
+        return "Profile Management"
+
+    return "General"
+
+
+def get_event_status(event_name):
+    if event_name.endswith("_failed"):
+        return "failed"
+
+    if event_name in [
+        "transfer_completed",
+        "bill_payment_completed",
+        "loan_application_submitted",
+        "profile_updated",
+        "balance_check",
+        "login"
+    ]:
+        return "success"
+
+    return "pending"
+
+
+def get_failure_reason(event_name):
+    if event_name == "transfer_failed":
+        return random.choice([
+            "insufficient_balance",
+            "invalid_recipient",
+            "network_timeout",
+            "provider_declined"
+        ])
+
+    return None
+
+
+def get_product_line_for_event(event_name):
+    if event_name.startswith("transfer"):
+        return "mobile_money"
+
+    if event_name.startswith("bill_payment"):
+        return "bill_payments"
+
+    if event_name.startswith("loan_application"):
+        return "micro_loans"
+
+    return None
+
+
+def generate_device_id():
+    return f"DEV{random.randint(1, 999999):06d}"
+
+
+def generate_session_id(customer_id, session_number):
+    return f"SES-{customer_id}-{session_number:06d}"
+
+
+def generate_ip_address():
+    return fake.ipv4_public()
+
+
+def get_location_from_region(region):
+    region_locations = {
+        "Greater Accra": ("Accra", "Greater Accra"),
+        "Ashanti": ("Kumasi", "Ashanti"),
+        "Western": ("Takoradi", "Western"),
+        "Central": ("Cape Coast", "Central"),
+        "Northern": ("Tamale", "Northern"),
+        "Volta": ("Ho", "Volta"),
+        "Eastern": ("Koforidua", "Eastern"),
+        "Upper East": ("Bolgatanga", "Upper East"),
+        "Upper West": ("Wa", "Upper West"),
+        "Bono": ("Sunyani", "Bono"),
+        "Bono East": ("Techiman", "Bono East"),
+        "Ahafo": ("Goaso", "Ahafo"),
+        "Savannah": ("Damongo", "Savannah"),
+        "North East": ("Nalerigu", "North East"),
+        "Oti": ("Dambai", "Oti"),
+        "Western North": ("Sefwi Wiawso", "Western North")
+    }
+
+    return region_locations.get(region, ("Accra", "Greater Accra"))
+
+
+def random_ghana_coordinates():
+    latitude = round(random.uniform(4.5, 11.5), 7)
+    longitude = round(random.uniform(-3.5, 1.2), 7)
+    return latitude, longitude
+
+
+def get_event_category(event_name):
+    if event_name == "login":
+        return "AUTHENTICATION"
+
+    if event_name in ["transfer_initiated", "transfer_completed", "transfer_failed"]:
+        return "TRANSFER"
+
+    if event_name in ["bill_payment_initiated", "bill_payment_completed"]:
+        return "BILL_PAYMENT"
+
+    if event_name in ["loan_application_started", "loan_application_submitted"]:
+        return "LOAN"
+
+    if event_name == "balance_check":
+        return "ACCOUNT"
+
+    if event_name == "profile_updated":
+        return "PROFILE"
+
+    return "GENERAL"
+
+
+def get_screen_name(event_name):
+    screen_map = {
+        "login": "Login",
+        "transfer_initiated": "Send Money",
+        "transfer_completed": "Transfer Confirmation",
+        "transfer_failed": "Transfer Failed",
+        "bill_payment_initiated": "Bill Payment",
+        "bill_payment_completed": "Bill Payment Confirmation",
+        "loan_application_started": "Loan Application",
+        "loan_application_submitted": "Loan Review",
+        "balance_check": "Wallet Balance",
+        "profile_updated": "Profile Settings"
+    }
+
+    return screen_map.get(event_name, "Home")
+
+
+def get_flow_name(event_name):
+    if event_name.startswith("transfer"):
+        return "MoMo Transfer"
+
+    if event_name.startswith("bill_payment"):
+        return "Bill Payment"
+
+    if event_name.startswith("loan_application"):
+        return "Micro Loan Application"
+
+    if event_name == "login":
+        return "Authentication"
+
+    if event_name == "balance_check":
+        return "Account Balance"
+
+    if event_name == "profile_updated":
+        return "Profile Management"
+
+    return "General"
+
+
+def get_event_status(event_name):
+    if event_name.endswith("_failed"):
+        return "failed"
+
+    if event_name in [
+        "login",
+        "transfer_completed",
+        "bill_payment_completed",
+        "loan_application_submitted",
+        "balance_check",
+        "profile_updated"
+    ]:
+        return "success"
+
+    return "pending"
+
+
+def get_failure_reason(event_name):
+    if event_name == "transfer_failed":
+        return random.choice([
+            "insufficient_balance",
+            "invalid_recipient",
+            "network_timeout",
+            "provider_declined"
+        ])
+
+    return None
+
+
+def get_product_line_for_event(event_name):
+    if event_name.startswith("transfer"):
+        return "mobile_money"
+
+    if event_name.startswith("bill_payment"):
+        return "bill_payments"
+
+    if event_name.startswith("loan_application"):
+        return "micro_loans"
+
+    return None
+
+
+def generate_device_id():
+    return f"DEV{random.randint(1, 999999):06d}"
+
+
+def generate_session_id(customer_id, session_number):
+    return f"SES-{customer_id}-{session_number:06d}"
+
+
+def generate_ip_address():
+    return fake.ipv4_public()
+
+
+def get_location_from_region(region):
+    region_locations = {
+        "Greater Accra": ("Accra", "Greater Accra"),
+        "Ashanti": ("Kumasi", "Ashanti"),
+        "Western": ("Takoradi", "Western"),
+        "Central": ("Cape Coast", "Central"),
+        "Northern": ("Tamale", "Northern"),
+        "Volta": ("Ho", "Volta"),
+        "Eastern": ("Koforidua", "Eastern"),
+        "Upper East": ("Bolgatanga", "Upper East"),
+        "Upper West": ("Wa", "Upper West"),
+        "Bono": ("Sunyani", "Bono"),
+        "Bono East": ("Techiman", "Bono East"),
+        "Ahafo": ("Goaso", "Ahafo"),
+        "Savannah": ("Damongo", "Savannah"),
+        "North East": ("Nalerigu", "North East"),
+        "Oti": ("Dambai", "Oti"),
+        "Western North": ("Sefwi Wiawso", "Western North")
+    }
+
+    return region_locations.get(region, ("Accra", "Greater Accra"))
+
+
+def generate_app_events(n=5000):
+    app_events = []
+
+    customer_df = pd.read_sql(
+        """
+        SELECT customer_id, region
+        FROM customers
+        """,
+        engine
+    )
+
+    if customer_df.empty:
+        raise ValueError("No customers found. Insert customers before generating app events.")
+
+    customers = customer_df.to_dict("records")
+
+    transaction_df = pd.read_sql(
+        """
+        SELECT
+            transaction_id,
+            customer_id,
+            product_line,
+            amount,
+            status,
+            reference,
+            receiver_msisdn,
+            biller_id,
+            created_at
+        FROM transactions
+        """,
+        engine
+    )
+
+    transactions = transaction_df.to_dict("records")
+
+    transactions_by_customer = {}
+
+    for txn in transactions:
+        transactions_by_customer.setdefault(txn["customer_id"], []).append(txn)
+
+    event_weights = {
+        "login": 0.20,
+        "transfer_initiated": 0.14,
+        "transfer_completed": 0.13,
+        "transfer_failed": 0.05,
+        "bill_payment_initiated": 0.10,
+        "bill_payment_completed": 0.09,
+        "loan_application_started": 0.07,
+        "loan_application_submitted": 0.05,
+        "balance_check": 0.12,
+        "profile_updated": 0.05
+    }
+
+    os_options = {
+        "Android": 0.78,
+        "iOS": 0.22
+    }
+
+    android_versions = ["10", "11", "12", "13", "14", "15"]
+    ios_versions = ["15", "16", "17", "18"]
+    app_versions = ["1.0.0", "1.1.0", "1.2.3", "2.0.0", "2.1.1", "2.2.0", "3.0.0"]
+
+    session_counter = 1
+    event_counter = 1
+
+    while len(app_events) < n:
+        customer = random.choice(customers)
+        customer_id = customer["customer_id"]
+
+        session_id = generate_session_id(customer_id, session_counter)
+        session_counter += 1
+
+        device_id = generate_device_id()
+        os_name = weighted_choice(os_options)
+        os_version = random.choice(android_versions if os_name == "Android" else ios_versions)
+        app_version = random.choice(app_versions)
+
+        location_city, location_region = get_location_from_region(customer.get("region"))
+        latitude, longitude = random_ghana_coordinates()
+
+        session_start = random_datetime_last_12_months()
+        session_event_count = random.randint(2, 8)
+
+        session_events = ["login"]
+
+        for _ in range(session_event_count - 1):
+            session_events.append(weighted_choice(event_weights))
+
+        for event_index, event_name in enumerate(session_events):
+            if len(app_events) >= n:
+                break
+
+            event_timestamp = session_start + timedelta(seconds=random.randint(5, 900) * event_index)
+            ingested_at = event_timestamp + timedelta(seconds=random.randint(1, 15))
+            created_at = ingested_at
+
+            product_line = get_product_line_for_event(event_name)
+            linked_transaction = None
+
+            customer_transactions = transactions_by_customer.get(customer_id, [])
+
+            if customer_transactions and product_line:
+                matching_txns = [
+                    txn for txn in customer_transactions
+                    if txn["product_line"] == product_line
+                ]
+
+                if matching_txns and random.random() < 0.70:
+                    linked_transaction = random.choice(matching_txns)
+
+            transaction_id = linked_transaction["transaction_id"] if linked_transaction else None
+            amount = linked_transaction["amount"] if linked_transaction else None
+            reference = linked_transaction["reference"] if linked_transaction else None
+            recipient_msisdn = linked_transaction["receiver_msisdn"] if linked_transaction else None
+            biller_id = linked_transaction["biller_id"] if linked_transaction else None
+
+            event_status = get_event_status(event_name)
+
+            if linked_transaction:
+                if event_name in ["transfer_completed", "bill_payment_completed"]:
+                    event_status = "success"
+                elif event_name == "transfer_failed":
+                    event_status = "failed"
+
+            event = {
+                "event_id": f"EVT{event_counter:08d}",
+                "customer_id": customer_id,
+                "session_id": session_id,
+                "device_id": device_id,
+
+                "event_name": event_name,
+                "event_category": get_event_category(event_name),
+                "event_source": "MOBILE_APP",
+                "screen_name": get_screen_name(event_name),
+                "flow_name": get_flow_name(event_name),
+
+                "product_line": product_line,
+                "transaction_id": transaction_id,
+                "loan_id": None,
+
+                "amount": amount,
+                "currency": "GHS",
+
+                "recipient_msisdn": recipient_msisdn,
+                "biller_id": biller_id,
+                "merchant_id": None,
+                "reference": reference,
+
+                "event_status": event_status,
+                "failure_reason": get_failure_reason(event_name),
+
+                "ip_address": generate_ip_address(),
+                "location_city": location_city,
+                "location_region": location_region,
+                "latitude": latitude,
+                "longitude": longitude,
+
+                "app_version": app_version,
+                "os_name": os_name,
+                "os_version": os_version,
+
+                "event_timestamp": event_timestamp,
+                "ingested_at": ingested_at,
+                "created_at": created_at
+            }
+
+            app_events.append(event)
+            event_counter += 1
+
+    return app_events
+ 
 def insert_dataframe_in_chunks(df, table_name, engine, chunk_size=1000):
     total_rows = len(df)
     inserted_rows = 0
 
-    print(f"Starting insert into `{table_name}`...")
-    print(f"Total rows: {total_rows}")
-    print(f"Chunk size: {chunk_size}")
+    logger.info(f"Starting insert into `{table_name}`...")
+    logger.info(f"Total rows: {total_rows}")
+    logger.info(f"Chunk size: {chunk_size}")
 
     for start in range(0, total_rows, chunk_size):
         end = min(start + chunk_size, total_rows)
@@ -970,57 +1450,56 @@ def insert_dataframe_in_chunks(df, table_name, engine, chunk_size=1000):
             )
 
             inserted_rows += len(chunk)
-            print(f"Inserted rows {start + 1}-{end} ({inserted_rows}/{total_rows})")
+            logger.info(f"Inserted rows {start + 1}-{end} ({inserted_rows}/{total_rows})")
 
         except SQLAlchemyError as e:
-            print(f"\nFailed inserting rows {start + 1}-{end}")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error: {e}")
-            print("\nFailed chunk columns:")
-            print(chunk.columns.tolist())
-            print("\nFailed chunk preview:")
-            print(chunk.head())
+            logger.exception(f"\nFailed inserting rows {start + 1}-{end}")
+            logger.exception(f"Error type: {type(e).__name__}")
+            logger.exception(f"Error: {e}")
+            logger.exception("\nFailed chunk columns:")
+            logger.exception(chunk.columns.tolist())
+            logger.exception("\nFailed chunk preview:")
+            logger.exception(chunk.head())
             return False
 
         except Exception as e:
-            print(f"\nUnexpected error inserting rows {start + 1}-{end}")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error: {e}")
-            print("\nFailed chunk preview:")
-            print(chunk.head())
+            logger.exception(f"\nUnexpected error inserting rows {start + 1}-{end}")
+            logger.exception(f"Error type: {type(e).__name__}")
+            logger.exception(f"Error: {e}")
+            logger.exception("\nFailed chunk preview:")
+            logger.exception(chunk.head())
             return False
 
-    print(f"Successfully inserted {inserted_rows}/{total_rows} rows into `{table_name}`.")
+    logger.info(f"Successfully inserted {inserted_rows}/{total_rows} rows into `{table_name}`.")
     return True
-
 
 if __name__ == "__main__":
     try:
-        print("Generating loans...")
-        loans = generate_loans(500)
-        loans_df = pd.DataFrame(loans)
+        logger.info("Generating app events...")
+        app_events = generate_app_events(5000)
+        app_events_df = pd.DataFrame(app_events)
 
-        print("Generated loans DataFrame.")
-        print(f"Shape: {loans_df.shape}")
-        print("Columns:")
-        print(loans_df.columns.tolist())
+        logger.info("Generated app_events DataFrame.")
+        print(f"Shape: {app_events_df.shape}")
+        logger.info("Columns:")
+        print(app_events_df.columns.tolist())
 
-        print("\nSample rows:")
-        print(loans_df.head())
+        logger.info("\nSample rows:")
+        print(app_events_df.head())
 
         success = insert_dataframe_in_chunks(
-            df=loans_df,
-            table_name="loans",
+            df=app_events_df,
+            table_name="app_events",
             engine=engine,
-            chunk_size=100
+            chunk_size=500
         )
 
         if success:
-            print("Loan generation and insert completed successfully.")
+            logger.info("App events generation and insert completed successfully.")
         else:
-            print("Loan insert failed. Fix the issue above and rerun.")
+            logger.info("App events insert failed. Fix the issue above and rerun.")
 
     except Exception as e:
-        print("Fatal error in loan generation script.")
-        print(f"Error type: {type(e).__name__}")
-        print(f"Error: {e}")
+        logger.exception("Fatal error in app_events generation script.")
+        logger.exception(f"Error type: {type(e).__name__}")
+        logger.exception(f"Error: {e}")
